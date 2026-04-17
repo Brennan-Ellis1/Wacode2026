@@ -1,3 +1,5 @@
 # Wacode2026
 
-flkdjfldjlfjdl
+- Compiles Grocery Results to find the best store nearby
+
+Takes a list of groceries and filters through the user's preferred stores
