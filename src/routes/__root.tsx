@@ -1,4 +1,11 @@
-import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
+import {
+  Outlet,
+  Link,
+  createRootRouteWithContext,
+  HeadContent,
+  Scripts,
+} from "@tanstack/react-router";
+import { getCurrentUser, type AuthUser } from "@/lib/auth";
 
 import appCss from "../styles.css?url";
 
@@ -24,7 +31,11 @@ function NotFoundComponent() {
   );
 }
 
-export const Route = createRootRoute({
+export type RouterAppContext = {
+  auth: AuthUser | null;
+};
+
+export const Route = createRootRouteWithContext<RouterAppContext>()({
   head: () => ({
     meta: [
       { charSet: "utf-8" },
@@ -47,6 +58,10 @@ export const Route = createRootRoute({
     ],
   }),
   shellComponent: RootShell,
+  beforeLoad: async () => {
+    const auth = await getCurrentUser();
+    return { auth };
+  },
   component: RootComponent,
   notFoundComponent: NotFoundComponent,
 });

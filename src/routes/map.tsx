@@ -16,6 +16,7 @@ import {
   avgLoad,
   fetchRealWorldPlacesAround,
 } from "@/lib/sensory";
+import { loadPreferenceForCurrentUser, savePreferenceForCurrentUser } from "@/lib/auth";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -50,6 +51,7 @@ type FilterKey = (typeof FILTERS)[number]["key"];
 const CATEGORIES = ["All", "Café", "Restaurant", "Park", "Library", "Bookstore", "Grocery", "Transit", "Shopping", "Salon", "Community"];
 
 function MapPage() {
+  const { auth } = Route.useRouteContext();
   // Initialize to a stable value so SSR and first client render match.
   // The real local hour is applied after hydration.
   const [hour, setHour] = useState(12);
@@ -66,6 +68,7 @@ function MapPage() {
   const [locating, setLocating] = useState(false);
   const [realPlaces, setRealPlaces] = useState<Place[] | null>(null);
   const [placesLoading, setPlacesLoading] = useState(false);
+  const [prefsHydrated, setPrefsHydrated] = useState(false);
 
   // Load real named places near the active center. Fall back to seed data
   // if OSM is rate-limited or unavailable.
@@ -103,6 +106,42 @@ function MapPage() {
 
   const selected = allPlaces.find((p) => p.id === selectedId) ?? null;
 
+  useEffect(() => {
+    let cancelled = false;
+    if (!auth) {
+      setPrefsHydrated(true);
+      return;
+    }
+
+    loadPreferenceForCurrentUser()
+      .then((pref) => {
+        if (cancelled) return;
+        if (pref) {
+          setFilter(pref.tolerance);
+          setCategory(pref.category);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setPrefsHydrated(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [auth]);
+
+  useEffect(() => {
+    if (!auth || !prefsHydrated) return;
+    void savePreferenceForCurrentUser({
+      data: {
+        tolerance: filter,
+        category,
+      },
+    }).catch(() => {
+      // Preference save failures should not block map interaction.
+    });
+  }, [auth, prefsHydrated, filter, category]);
+
   function handleLocate() {
     if (!("geolocation" in navigator)) {
       setAnnouncement("Geolocation isn't supported in this browser.");
@@ -122,8 +161,8 @@ function MapPage() {
           err.code === err.PERMISSION_DENIED
             ? "Location permission denied. Allow access in your browser settings to use this."
             : err.code === err.POSITION_UNAVAILABLE
-              ? "Location unavailable right now. Try again, or use the demo location."
-              : "Couldn't read your location. Try again or use the demo location.";
+              ? "Location unavailable right now. Try again in a moment."
+              : "Couldn't read your location. Please try again.";
         setAnnouncement(msg);
       },
       { timeout: 10000, enableHighAccuracy: true, maximumAge: 60000 }
