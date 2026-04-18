@@ -14,10 +14,27 @@ export type UserPreferenceRecord = {
   updatedAt: number;
 };
 
+export type UserReportRecord = {
+  id: string;
+  userId: string;
+  userEmail: string;
+  placeId: string;
+  hour: number;
+  dims: {
+    noise: number;
+    light: number;
+    crowd: number;
+    smell: number;
+  };
+  note?: string;
+  createdAt: number;
+};
+
 type DatabaseState = {
   usersById: Map<string, UserRecord>;
   usersByEmail: Map<string, UserRecord>;
   preferencesByUserId: Map<string, UserPreferenceRecord>;
+  reportsByPlaceId: Map<string, UserReportRecord[]>;
 };
 
 const DB_STATE_KEY = Symbol.for("quiethours.auth.db.state");
@@ -31,6 +48,7 @@ function getState(): DatabaseState {
       usersById: new Map<string, UserRecord>(),
       usersByEmail: new Map<string, UserRecord>(),
       preferencesByUserId: new Map<string, UserPreferenceRecord>(),
+      reportsByPlaceId: new Map<string, UserReportRecord[]>(),
     };
   }
   return globalObj[DB_STATE_KEY];
@@ -75,4 +93,18 @@ export async function saveUserPreferences(input: {
   };
   state.preferencesByUserId.set(input.userId, next);
   return next;
+}
+
+export async function createUserReport(input: UserReportRecord): Promise<UserReportRecord> {
+  const state = getState();
+  const existing = state.reportsByPlaceId.get(input.placeId) ?? [];
+  const nextList = [input, ...existing];
+  state.reportsByPlaceId.set(input.placeId, nextList);
+  return input;
+}
+
+export async function getReportsForPlace(placeId: string, limit = 20): Promise<UserReportRecord[]> {
+  const state = getState();
+  const reports = state.reportsByPlaceId.get(placeId) ?? [];
+  return reports.slice(0, Math.max(1, limit));
 }

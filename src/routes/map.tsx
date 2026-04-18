@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SensoryProfileChart } from "@/components/SensoryProfileChart";
 import { RealMap } from "@/components/RealMap";
@@ -17,6 +17,7 @@ import {
   fetchRealWorldPlacesAround,
 } from "@/lib/sensory";
 import { loadPreferenceForCurrentUser, savePreferenceForCurrentUser } from "@/lib/auth";
+import { loadReportsForPlace, submitReportForCurrentUser } from "@/lib/reports";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -69,6 +70,27 @@ function MapPage() {
   const [realPlaces, setRealPlaces] = useState<Place[] | null>(null);
   const [placesLoading, setPlacesLoading] = useState(false);
   const [prefsHydrated, setPrefsHydrated] = useState(false);
+  const autoLocateRequestedRef = useRef(false);
+
+  // Auto-request location once so the map can focus on the user immediately.
+  useEffect(() => {
+    if (autoLocateRequestedRef.current) return;
+    autoLocateRequestedRef.current = true;
+    if (!("geolocation" in navigator)) return;
+
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setUserLoc({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setAnnouncement("Location found. Map recentered on you.");
+        setLocating(false);
+      },
+      () => {
+        setLocating(false);
+      },
+      { timeout: 10000, enableHighAccuracy: true, maximumAge: 60000 }
+    );
+  }, []);
 
   // Load real named places near the active center. Fall back to seed data
   // if OSM is rate-limited or unavailable.
@@ -105,6 +127,24 @@ function MapPage() {
   }, [allPlaces, hour, filter, category]);
 
   const selected = allPlaces.find((p) => p.id === selectedId) ?? null;
+
+  useEffect(() => {
+    if (!selectedId) {
+      setReports([]);
+      return;
+    }
+    let cancelled = false;
+    loadReportsForPlace({ data: { placeId: selectedId, limit: 25 } })
+      .then((next) => {
+        if (!cancelled) setReports(next);
+      })
+      .catch(() => {
+        if (!cancelled) setAnnouncement("Couldn't load reports right now.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -169,18 +209,27 @@ function MapPage() {
     );
   }
 
-  function submitReport(placeId: string, dims: SensoryDimensions, note?: string) {
-    const r: Report = {
-      id: `r${Date.now()}`,
-      placeId,
-      hour,
-      dims,
-      note,
-      createdAt: Date.now(),
-    };
-    setReports((prev) => [r, ...prev]);
-    setReportOpen(false);
-    setAnnouncement(`Thanks — your report at ${fmtHour(hour)} was added.`);
+  async function submitReport(placeId: string, dims: SensoryDimensions, note?: string) {
+    if (!auth) {
+      setAnnouncement("Sign in to submit reports.");
+      return;
+    }
+    try {
+      const saved = await submitReportForCurrentUser({
+        data: {
+          placeId,
+          hour,
+          dims,
+          note,
+        },
+      });
+      setReports((prev) => [saved as Report, ...prev]);
+      setReportOpen(false);
+      setAnnouncement(`Thanks — your report at ${fmtHour(hour)} was added.`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Couldn't save your report.";
+      setAnnouncement(message);
+    }
   }
 
   return (
@@ -493,7 +542,7 @@ function PlaceDetail({
                   <span className="text-xs font-medium">
                     Reported at {fmtHour(r.hour)} · avg {avgLoad(r.dims)}/100
                   </span>
-                  <span className="text-[10px] text-muted-foreground">just now</span>
+                  <span className="text-[10px] text-muted-foreground">by {r.userEmail}</span>
                 </div>
                 {r.note && <p className="mt-1 text-xs text-muted-foreground">{r.note}</p>}
               </li>

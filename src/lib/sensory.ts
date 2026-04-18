@@ -25,6 +25,8 @@ export type Place = {
 
 export type Report = {
   id: string;
+  userId: string;
+  userEmail: string;
   placeId: string;
   hour: number;
   dims: SensoryDimensions;

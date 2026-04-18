@@ -86,7 +86,7 @@ export function RealMap({
     if (!mapRef.current || !userLoc) return;
     mapRef.current.flyTo({
       center: [userLoc.lng, userLoc.lat],
-      zoom: 14,
+      zoom: 16,
       essential: true,
     });
   }, [userLoc]);
