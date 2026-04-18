@@ -192,13 +192,6 @@ function Problem() {
             <Stat big="0" label="major mapping apps tell you when a place is calm" />
           </div>
         </div>
-        <figure className="mt-12 rounded-2xl border border-border/60 bg-card p-8">
-          <blockquote className="text-xl leading-relaxed text-foreground">
-            "I've left grocery carts in aisles and walked out. The lights, the announcements, the
-            crowd at 6pm — I just can't. If I knew it was calm at 9am, that's the only time I'd go."
-          </blockquote>
-          <figcaption className="mt-3 text-sm text-muted-foreground">— Maya, autistic adult</figcaption>
-        </figure>
       </div>
     </section>
   );

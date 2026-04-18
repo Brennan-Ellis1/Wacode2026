@@ -14,7 +14,7 @@ import {
   LEVEL_LABELS,
   bestHours,
   avgLoad,
-  generatePlacesAround,
+  fetchRealWorldPlacesAround,
 } from "@/lib/sensory";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
@@ -64,16 +64,31 @@ function MapPage() {
   const [reportOpen, setReportOpen] = useState(false);
   const [announcement, setAnnouncement] = useState("");
   const [locating, setLocating] = useState(false);
+  const [realPlaces, setRealPlaces] = useState<Place[] | null>(null);
+  const [placesLoading, setPlacesLoading] = useState(false);
 
-  // If the user is far from the seeded neighborhood, generate believable
-  // places around them so the map looks alive wherever they are.
-  const allPlaces = useMemo<Place[]>(() => {
-    if (!userLoc) return SEED_PLACES;
-    const nearAnySeed = SEED_PLACES.some(
-      (p) => Math.abs(p.lat - userLoc.lat) < 0.02 && Math.abs(p.lng - userLoc.lng) < 0.025
-    );
-    return nearAnySeed ? SEED_PLACES : generatePlacesAround(userLoc, 10);
+  // Load real named places near the active center. Fall back to seed data
+  // if OSM is rate-limited or unavailable.
+  useEffect(() => {
+    const center = userLoc ?? { lat: 40.7301, lng: -73.9962 };
+    const ctrl = new AbortController();
+    setPlacesLoading(true);
+    fetchRealWorldPlacesAround(center, 40, ctrl.signal)
+      .then((places) => {
+        setRealPlaces(places);
+      })
+      .catch(() => {
+        setRealPlaces(null);
+        setAnnouncement("Real-world places unavailable. Showing built-in sample locations.");
+      })
+      .finally(() => setPlacesLoading(false));
+
+    return () => ctrl.abort();
   }, [userLoc]);
+
+  const allPlaces = useMemo<Place[]>(() => {
+    return realPlaces && realPlaces.length > 0 ? realPlaces : SEED_PLACES;
+  }, [realPlaces]);
 
   const visible = useMemo(() => {
     return allPlaces.filter((p) => {
@@ -115,11 +130,6 @@ function MapPage() {
     );
   }
 
-  function useDemoLocation() {
-    setUserLoc({ lat: 40.7301, lng: -73.9962 });
-    setAnnouncement("Using demo location in the seeded neighborhood.");
-  }
-
   function submitReport(placeId: string, dims: SensoryDimensions, note?: string) {
     const r: Report = {
       id: `r${Date.now()}`,
@@ -149,14 +159,12 @@ function MapPage() {
             <p className="text-xs text-muted-foreground">
               Showing {visible.length} place{visible.length === 1 ? "" : "s"} at {fmtHour(hour)}
             </p>
+            {placesLoading && <p className="mt-1 text-xs text-muted-foreground">Loading nearby real places…</p>}
           </div>
 
           <div className="flex flex-wrap gap-2">
             <Button onClick={handleLocate} variant="outline" size="sm" disabled={locating}>
               <Locate /> {locating ? "Locating…" : userLoc ? "Update my location" : "Find me"}
-            </Button>
-            <Button onClick={useDemoLocation} variant="ghost" size="sm">
-              Use demo location
             </Button>
           </div>
           {userLoc && (

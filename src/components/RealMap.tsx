@@ -91,6 +91,18 @@ export function RealMap({
     });
   }, [userLoc]);
 
+  // Zoom to selected place when selected from list/map.
+  useEffect(() => {
+    if (!mapRef.current || !selectedId) return;
+    const selectedPlace = allPlaces.find((p) => p.id === selectedId);
+    if (!selectedPlace) return;
+    mapRef.current.flyTo({
+      center: [selectedPlace.lng, selectedPlace.lat],
+      zoom: 16,
+      essential: true,
+    });
+  }, [selectedId, allPlaces]);
+
   // Render / update place markers
   useEffect(() => {
     const maplibregl = maplibreRef.current;
